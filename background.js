@@ -19,6 +19,8 @@
 
 
   let redirectsThatHappened = new Map();
+  let liveTabId2url = new Map();
+  let deadTabId2url = new Map();
 
   let onBeforeRedirectListener = function(details) {
     if (verboseLevel >= 2) console.log("in onBeforeRedirect listener, tabId="+EXACT(details.tabId)+" requestId="+EXACT(details.requestId)+": "+EXACT(details.method)+" "+EXACT(details.url)+" -> "+details.statusCode+" -> "+EXACT(details.redirectUrl));
@@ -56,6 +58,61 @@
   };  // onBeforeRedirectListener
 
   chrome.webRequest.onBeforeRedirect.addListener(onBeforeRedirectListener, {urls:["<all_urls>"]}, ["responseHeaders"]);  // options: responseHeaders
+
+  chrome.tabs.onCreated.addListener(function(tab) {
+    if (verboseLevel >= 2) console.log("in tabs.onCreated listener(tab="+EXACT(tab));
+    liveTabId2url.set(tab.id, tab.url);
+    // Idea: if tab has no openerTabId, then it may be a reopen of a previously closed tab.  In that case, need to search for the previoues incarnation of it and inherit its info.
+    //    - tabs created by clicking a link have an openerTabId
+    //    - tabs created by ctrl-t have an openerTabId
+    if (tab.openerTabId === undefined) {
+      // CBB: search only dead ones!
+      if (verboseLevel >= 2) console.log("  has no openerTabId, so may be a resurrection.  searching "+redirectsThatHappened.size+" old tabs...");
+      let broke = false;
+      redirectsThatHappened.forEach((redirectsThisOldTabId, oldTabId, map) => {
+        if (broke) return;  // XXX hacky
+        if (verboseLevel >= 2) console.log("      examining oldTabId "+oldTabId+" with url "+EXACT(deadTabId2url.get(oldTabId)));
+        if (deadTabId2url.has(oldTabId)) {
+          const oldUrl = deadTabId2url.get(oldTabId);
+          if (oldUrl == tab.url) {
+            if (verboseLevel >= 2) console.log("  HEY! This new tab "+EXACT(tab.id)+" may be a resurrection of old tab "+EXACT(oldTabId)+"! inheriting its "+redirectsThisOldTabId.length+" redirects");
+            redirectsThatHappened.set(tab.id, redirectsThisOldTabId);
+            redirectsThatHappened.delete(oldTabId);
+            deadTabId2url.delete(oldTabId);
+            broke = true;
+          }
+        }
+      });
+    }
+    if (verboseLevel >= 2) console.log("out tabs.onCreated listener(tab="+EXACT(tab));
+  });
+
+  chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
+    if (verboseLevel >= 2) console.log("in tabs.onUpdated listener(tabId="+EXACT(tabId)+", changeInfo="+EXACT(changeInfo)+")");
+    let url = changeInfo.url;
+    if (url !== undefined) {
+      if (verboseLevel >= 2) console.log("  setting tab "+tabId+"'s url to "+EXACT(url));
+      liveTabId2url.set(tabId, url);
+    }
+    if (verboseLevel >= 2) console.log("out tabs.onUpdated listener(tabId="+EXACT(tabId)+", changeInfo="+EXACT(changeInfo)+")");
+  });
+  chrome.tabs.onRemoved.addListener(function(tabId, removeInfo) {
+    if (verboseLevel >= 2) console.log("in tabs.onRemoved listener(tabId="+EXACT(tabId)+", removeInfo="+EXACT(removeInfo)+")");
+    let dyingUrl = liveTabId2url.get(tabId);
+    liveTabId2url.delete(tabId);
+    if (verboseLevel >= 2) console.log("  tab "+tabId+"'s dying url is "+EXACT(dyingUrl));
+    deadTabId2url.set(tabId, dyingUrl);
+    if (verboseLevel >= 2) console.log("out tabs.onRemoved listener(tabId="+EXACT(tabId)+", removeInfo="+EXACT(removeInfo)+")");
+  });
+
+  // Need to start by populating liveTabId2url.
+  chrome.tabs.query({}, tabs => {
+    tabs.forEach(tab => {
+      console.log("      "+EXACT(tab.id)+" -> "+EXACT(tab.url));
+      liveTabId2url.set(tab.id, tab.url);
+    });
+    console.log("Initially "+liveTabId2url.size+" tabs.");  // delayed
+  });
 
   //
   // Define and install chrome.runtime listeners.
