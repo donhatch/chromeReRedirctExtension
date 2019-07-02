@@ -51,6 +51,7 @@
         console.log("  "+i+": "+EXACT(redirectsThatHappened.get(tabId)[i]));
       }
     }
+    if (verboseLevel >= 2) console.log("  redirectsThatHappened.size="+redirectsThatHappened.size+" liveTabId2url.size="+liveTabId2url.size+" deadTabId2url.size="+deadTabId2url.size);
 
     let answer = null;
     if (verboseLevel >= 2) console.log("out onBeforeRedirect listener, tabId="+EXACT(details.tabId)+" requestId="+EXACT(details.requestId)+": "+EXACT(details.method)+" "+EXACT(details.url)+" -> "+details.statusCode+" -> "+EXACT(details.redirectUrl));
@@ -84,6 +85,7 @@
         }
       });
     }
+    if (verboseLevel >= 2) console.log("  redirectsThatHappened.size="+redirectsThatHappened.size+" liveTabId2url.size="+liveTabId2url.size+" deadTabId2url.size="+deadTabId2url.size);
     if (verboseLevel >= 2) console.log("out tabs.onCreated listener(tab="+EXACT(tab));
   });
 
@@ -102,6 +104,7 @@
     liveTabId2url.delete(tabId);
     if (verboseLevel >= 2) console.log("  tab "+tabId+"'s dying url is "+EXACT(dyingUrl));
     deadTabId2url.set(tabId, dyingUrl);
+    if (verboseLevel >= 2) console.log("  redirectsThatHappened.size="+redirectsThatHappened.size+" liveTabId2url.size="+liveTabId2url.size+" deadTabId2url.size="+deadTabId2url.size);
     if (verboseLevel >= 2) console.log("out tabs.onRemoved listener(tabId="+EXACT(tabId)+", removeInfo="+EXACT(removeInfo)+")");
   });
 
